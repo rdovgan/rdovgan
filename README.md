@@ -1,6 +1,6 @@
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner-personal-page.svg)](https://stand-with-ukraine.pp.ua)
 
-![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=anuraghazra&show=reviews,discussions_started,discussions_answered,prs_merged,prs_merged_percentage)
+![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=rdovgan&show=reviews,discussions_started,discussions_answered,prs_merged,prs_merged_percentage)
 
 <a href="https://www.blockchain.com/btc/address/bc1qgvew4v5uheu24twv86s9ps2pa0n67ftdy0wvnp"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png" alt="BTC" width="18"/>`bc1qgvew4v5uheu24twv86s9ps2pa0n67ftdy0wvnp`</a>
 <br>
