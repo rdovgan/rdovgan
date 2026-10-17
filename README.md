@@ -1,6 +1,11 @@
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner-personal-page.svg)](https://stand-with-ukraine.pp.ua)
 
-[![rdovgan's github activity graph](https://github-readme-activity-graph.vercel.app/graph?username=rdovgan&theme=xcode)](https://github.com/ashutosh00710/github-readme-activity-graph)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="profile-3d-contrib/profile-night-rainbow.svg">
+  <img alt="3D contribution calendar" src="profile-3d-contrib/profile-season-animate.svg">
+</picture>
+
+![Metrics](metrics.svg)
 
 <a href="https://www.blockchain.com/btc/address/bc1qgvew4v5uheu24twv86s9ps2pa0n67ftdy0wvnp"><img src="https://bitcoinwiki.org/wp-content/uploads/2023/12/BC_Logo_.png" alt="BTC" width="18"/>`bc1qgvew4v5uheu24twv86s9ps2pa0n67ftdy0wvnp`</a>
 <br>
