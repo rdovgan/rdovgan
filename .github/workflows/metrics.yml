@@ -22,6 +22,7 @@ jobs:
           token: ${{ secrets.METRICS_TOKEN }}
           committer_token: ${{ github.token }}
           config_timezone: Europe/Kyiv
+          debug: yes
           base: header, activity, community, repositories
           plugin_isocalendar: yes
           plugin_isocalendar_duration: full-year
