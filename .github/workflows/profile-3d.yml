@@ -17,18 +17,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Check token access
-        env:
-          TOKEN: ${{ secrets.METRICS_TOKEN }}
+      # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection
+      - uses: actions/checkout@v5
+        with:
+          repository: yoshi389111/github-profile-3d-contrib
+          ref: 7d95e7d4cdc028dd1e1cbd957d65f35efb12ae39 # v0.9.3
+          path: .3d-contrib
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build 3D contrib
+        working-directory: .3d-contrib
         run: |
-          curl -sS -o /dev/null -D - -H "Authorization: bearer $TOKEN" https://api.github.com/user | grep -i '^x-oauth-scopes' || echo "No x-oauth-scopes header (not a classic token?)"
-          curl -sS -H "Authorization: bearer $TOKEN" -X POST https://api.github.com/graphql \
-            -d '{"query":"{ viewer { login contributionsCollection { restrictedContributionsCount commitContributionsByRepository(maxRepositories: 100) { repository { isPrivate } contributions { totalCount } } } } }"}' \
-            | jq '{viewer: .data.viewer.login, restricted: .data.viewer.contributionsCollection.restrictedContributionsCount, commits_by_visibility: (.data.viewer.contributionsCollection.commitContributionsByRepository // [] | group_by(.repository.isPrivate) | map({private: .[0].repository.isPrivate, repos: length, commits: (map(.contributions.totalCount) | add)})), errors: .errors}'
-      - uses: yoshi389111/github-profile-3d-contrib@7d95e7d4cdc028dd1e1cbd957d65f35efb12ae39 # v0.9.3
+          git apply ../.github/patches/3d-contrib-private-repos.patch
+          npm ci --no-audit --no-fund
+          npx tsc
+      - name: Generate 3D contrib
         env:
           GITHUB_TOKEN: ${{ secrets.METRICS_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
+        run: node .3d-contrib/dist0/src/index.js
       - name: Commit & Push
         run: |
           git config user.name github-actions
