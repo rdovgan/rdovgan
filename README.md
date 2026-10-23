@@ -1,9 +1,6 @@
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner-personal-page.svg)](https://stand-with-ukraine.pp.ua)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="profile-3d-contrib/profile-night-rainbow.svg">
-  <img alt="3D contribution calendar" src="profile-3d-contrib/profile-season-animate.svg">
-</picture>
+<img alt="3D contribution calendar" src="profile-3d-contrib/profile-season-dual.svg">
 
 ![Metrics](metrics.svg)
 
