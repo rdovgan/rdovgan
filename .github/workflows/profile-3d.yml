@@ -37,6 +37,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.METRICS_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
+          SETTING_JSON: .github/3d-colors.json
         run: node .3d-contrib/dist0/src/index.js
       - name: Commit & Push
         run: |
