@@ -1,0 +1,358 @@
+diff --git a/src/create-3d-contrib.ts b/src/create-3d-contrib.ts
+index a7a73ff..3f9117f 100644
+--- a/src/create-3d-contrib.ts
++++ b/src/create-3d-contrib.ts
+@@ -1,6 +1,7 @@
+ import * as d3 from 'd3';
+ import * as util from './utils';
+ import * as type from './type';
++import * as langColors from './language-colors';
+ 
+ const ANGLE = 30;
+ 
+@@ -203,6 +204,8 @@ export const create3DContrib = (
+         // ref. https://github.com/yoshi389111/github-profile-3d-contrib/issues/27
+         const calHeight = Math.log10(cal.contributionCount / 20 + 1) * 144 + 3;
+         const contribLevel = cal.contributionLevel;
++        // Sides take the color of the day's main language, the top keeps the season
++        const languageColor = contribLevel !== 0 ? langColors.dayLanguageColor(cal.date) : undefined;
+ 
+         const isAnimate = settings.growingAnimation || isForcedAnimation;
+ 
+@@ -289,6 +292,9 @@ export const create3DContrib = (
+         } else if (settings.type === 'bitmap') {
+             addBitmapPattern(leftPanel, contribLevel, 'left');
+         }
++        if (languageColor) {
++            leftPanel.attr('class', null).attr('fill', d3.rgb(languageColor).darker(0.3).toString());
++        }
+         if (isAnimate && contribLevel !== 0) {
+             leftPanel
+                 .append('animate')
+@@ -335,6 +341,9 @@ export const create3DContrib = (
+         } else if (settings.type === 'bitmap') {
+             addBitmapPattern(rightPanel, contribLevel, 'right');
+         }
++        if (languageColor) {
++            rightPanel.attr('class', null).attr('fill', d3.rgb(languageColor).darker(0.9).toString());
++        }
+         if (isAnimate && contribLevel !== 0) {
+             rightPanel
+                 .append('animate')
+diff --git a/src/index.ts b/src/index.ts
+index 93bd6ea..06b8339 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -4,6 +4,8 @@ import * as create from './create-svg';
+ import * as f from './file-writer';
+ import * as r from './settings-reader';
+ import * as client from './github-graphql';
++import * as activity from './repo-activity';
++import * as langColors from './language-colors';
+ 
+ export const main = async (): Promise<void> => {
+     try {
+@@ -41,6 +43,25 @@ export const main = async (): Promise<void> => {
+             maxRepos,
+             year,
+         );
++        if (response.data) {
++            const until = year ? `${year}-12-31T23:59:59Z` : new Date().toISOString();
++            const since = year
++                ? `${year}-01-01T00:00:00Z`
++                : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
++            const timeZone = process.env.TIME_ZONE || 'UTC';
++            const repoActivity = await activity.fetchRepoActivity(token, userName, since, until, timeZone);
++            const byRepository = response.data.user.contributionsCollection.commitContributionsByRepository;
++            byRepository.push(...repoActivity.privateCommits);
++            if (process.env.LANGUAGE_COLORS === 'true') {
++                langColors.setDayLanguages(repoActivity.dayLanguages);
++                for (const repo of byRepository) {
++                    const language = repo.repository.primaryLanguage;
++                    if (language) {
++                        repo.repository.primaryLanguage = { name: language.name, color: langColors.languageColor(language.name) };
++                    }
++                }
++            }
++        }
+         const userInfo = aggregate.aggregateUserInfo(response);
+ 
+         if (process.env.SETTING_JSON) {
+diff --git a/src/language-colors.ts b/src/language-colors.ts
+new file mode 100644
+index 0000000..1ed88ff
+--- /dev/null
++++ b/src/language-colors.ts
+@@ -0,0 +1,40 @@
++/**
++ * Distinct colors per language, shared by the 3D bars and the pie chart.
++ * GitHub's own language colors are too close to each other (Java / Python / TypeScript are all brownish or blue).
++ */
++const FIXED_COLORS: { [language: string]: string } = {
++    Java: '#f58518',
++    TypeScript: '#4c78a8',
++    Python: '#54a24b',
++    JavaScript: '#eeca3b',
++    HTML: '#e45756',
++    Shell: '#72b7b2',
++};
++const SPARE_COLORS = ['#b279a2', '#ff9da6', '#9d755d', '#bab0ac', '#17becf', '#bcbd22'];
++
++const assigned = new Map<string, string>(Object.entries(FIXED_COLORS));
++let spareIndex = 0;
++
++export const languageColor = (language: string): string => {
++    let color = assigned.get(language);
++    if (!color) {
++        color = SPARE_COLORS[spareIndex % SPARE_COLORS.length];
++        spareIndex++;
++        assigned.set(language, color);
++    }
++    return color;
++};
++
++/** "YYYY-MM-DD" -> language with the most commits that day */
++const dayLanguages = new Map<string, string>();
++
++export const setDayLanguages = (languages: Map<string, string>): void => {
++    dayLanguages.clear();
++    languages.forEach((language, day) => dayLanguages.set(day, language));
++};
++
++/** Color of the dominant language of the calendar day, if known */
++export const dayLanguageColor = (date: Date): string | undefined => {
++    const language = dayLanguages.get(date.toISOString().slice(0, 10));
++    return language ? languageColor(language) : undefined;
++};
+diff --git a/src/repo-activity.ts b/src/repo-activity.ts
+new file mode 100644
+index 0000000..78a77cd
+--- /dev/null
++++ b/src/repo-activity.ts
+@@ -0,0 +1,226 @@
++import axios from 'axios';
++import { URL, CommitContributionsByRepository } from './github-graphql';
++
++const reposPerPage = 20;
++const commitsPerPage = 100;
++
++type Language = {
++    name: string;
++    color: string | null;
++} | null;
++
++type History = {
++    totalCount: number;
++    pageInfo: {
++        hasNextPage: boolean;
++        endCursor: string | null;
++    };
++    nodes: Array<{ authoredDate: string }>;
++};
++
++type Repository = {
++    name: string;
++    isPrivate: boolean;
++    primaryLanguage: Language;
++    defaultBranchRef: {
++        target: {
++            history?: History;
++        };
++    } | null;
++};
++
++type GraphqlResponse<T> = {
++    data?: T;
++    errors?: Array<{ message: string }>;
++};
++
++export type RepoActivity = {
++    /** Commits in private repositories, to add when contributionsCollection hides them */
++    privateCommits: CommitContributionsByRepository;
++    /** "YYYY-MM-DD" -> language with the most commits that day */
++    dayLanguages: Map<string, string>;
++};
++
++const post = async <T>(
++    token: string,
++    query: string,
++    variables: Record<string, unknown>,
++): Promise<GraphqlResponse<T>> => {
++    const response = await axios.post<GraphqlResponse<T>>(
++        URL,
++        { query: query.replace(/\s+/g, ' '), variables },
++        { headers: { Authorization: `bearer ${token}` } },
++    );
++    return response.data;
++};
++
++const HISTORY_FIELDS = `
++    totalCount
++    pageInfo {
++        hasNextPage
++        endCursor
++    }
++    nodes {
++        authoredDate
++    }
++`;
++
++/**
++ * Commits of the user in their own repositories, read from the default branch history of each one.
++ * contributionsCollection hides private repositories (restrictedContributionsCount) even from a token with the repo scope.
++ */
++export const fetchRepoActivity = async (
++    token: string,
++    userName: string,
++    since: string,
++    until: string,
++    timeZone: string,
++): Promise<RepoActivity> => {
++    const empty: RepoActivity = { privateCommits: [], dayLanguages: new Map() };
++
++    const account = await post<{
++        user: { id: string; contributionsCollection: { restrictedContributionsCount: number } };
++    }>(
++        token,
++        `
++            query($login: String!, $from: DateTime!, $to: DateTime!) {
++                user(login: $login) {
++                    id
++                    contributionsCollection(from: $from, to: $to) {
++                        restrictedContributionsCount
++                    }
++                }
++            }
++        `,
++        { login: userName, from: since, to: until },
++    );
++    if (!account.data) {
++        console.warn('repo activity: cannot read the account', account.errors);
++        return empty;
++    }
++    const author = account.data.user.id;
++    const hiddenPrivate = account.data.user.contributionsCollection.restrictedContributionsCount > 0;
++
++    const toDay = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
++    /** day -> language -> commits */
++    const perDay = new Map<string, Map<string, number>>();
++    const countCommits = (language: Language, nodes: Array<{ authoredDate: string }>): void => {
++        if (!language) {
++            return;
++        }
++        for (const node of nodes) {
++            const day = toDay.format(new Date(node.authoredDate));
++            const languages = perDay.get(day) ?? new Map<string, number>();
++            languages.set(language.name, (languages.get(language.name) ?? 0) + 1);
++            perDay.set(day, languages);
++        }
++    };
++
++    const privateCommits: CommitContributionsByRepository = [];
++    let repoCursor: string | null = null;
++    do {
++        const page: GraphqlResponse<{
++            user: {
++                repositories: {
++                    pageInfo: { hasNextPage: boolean; endCursor: string | null };
++                    nodes: Repository[];
++                };
++            };
++        }> = await post(
++            token,
++            `
++                query($login: String!, $cursor: String, $author: ID!, $since: GitTimestamp!, $until: GitTimestamp!) {
++                    user(login: $login) {
++                        repositories(first: ${reposPerPage}, after: $cursor, ownerAffiliations: OWNER, isFork: false) {
++                            pageInfo {
++                                hasNextPage
++                                endCursor
++                            }
++                            nodes {
++                                name
++                                isPrivate
++                                primaryLanguage {
++                                    name
++                                    color
++                                }
++                                defaultBranchRef {
++                                    target {
++                                        ... on Commit {
++                                            history(first: ${commitsPerPage}, author: { id: $author }, since: $since, until: $until) {
++                                                ${HISTORY_FIELDS}
++                                            }
++                                        }
++                                    }
++                                }
++                            }
++                        }
++                    }
++                }
++            `,
++            { login: userName, cursor: repoCursor, author, since, until },
++        );
++        if (!page.data) {
++            console.warn('repo activity: cannot read repositories', page.errors);
++            break;
++        }
++        const repositories = page.data.user.repositories;
++        for (const repo of repositories.nodes) {
++            const history = repo.defaultBranchRef?.target.history;
++            if (!history || history.totalCount === 0) {
++                continue;
++            }
++            if (repo.isPrivate && hiddenPrivate) {
++                privateCommits.push({
++                    contributions: { totalCount: history.totalCount },
++                    repository: { primaryLanguage: repo.primaryLanguage },
++                });
++            }
++            countCommits(repo.primaryLanguage, history.nodes);
++
++            let commitCursor = history.pageInfo.hasNextPage ? history.pageInfo.endCursor : null;
++            while (commitCursor && repo.primaryLanguage) {
++                const next: GraphqlResponse<{
++                    user: { repository: { defaultBranchRef: { target: { history: History } } } };
++                }> = await post(
++                    token,
++                    `
++                        query($login: String!, $name: String!, $cursor: String!, $author: ID!, $since: GitTimestamp!, $until: GitTimestamp!) {
++                            user(login: $login) {
++                                repository(name: $name) {
++                                    defaultBranchRef {
++                                        target {
++                                            ... on Commit {
++                                                history(first: ${commitsPerPage}, after: $cursor, author: { id: $author }, since: $since, until: $until) {
++                                                    ${HISTORY_FIELDS}
++                                                }
++                                            }
++                                        }
++                                    }
++                                }
++                            }
++                        }
++                    `,
++                    { login: userName, name: repo.name, cursor: commitCursor, author, since, until },
++                );
++                const nextHistory = next.data?.user.repository.defaultBranchRef.target.history;
++                if (!nextHistory) {
++                    console.warn(`repo activity: cannot read more commits of a repository`, next.errors);
++                    break;
++                }
++                countCommits(repo.primaryLanguage, nextHistory.nodes);
++                commitCursor = nextHistory.pageInfo.hasNextPage ? nextHistory.pageInfo.endCursor : null;
++            }
++        }
++        repoCursor = repositories.pageInfo.hasNextPage ? repositories.pageInfo.endCursor : null;
++    } while (repoCursor);
++
++    const dayLanguages = new Map<string, string>();
++    perDay.forEach((languages, day) => {
++        const [top] = [...languages.entries()].sort((a, b) => b[1] - a[1]);
++        dayLanguages.set(day, top[0]);
++    });
++
++    const hidden = privateCommits.reduce((sum, repo) => sum + repo.contributions.totalCount, 0);
++    console.log(`repo activity: ${dayLanguages.size} days with a known language, ${hidden} hidden private commits added`);
++    return { privateCommits, dayLanguages };
++};

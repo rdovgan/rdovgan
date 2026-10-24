@@ -17,7 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection
+      # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection,
+      # and colors the sides of each bar by the day's main language
       - uses: actions/checkout@v5
         with:
           repository: yoshi389111/github-profile-3d-contrib
@@ -30,7 +31,7 @@ jobs:
       - name: Build 3D contrib
         working-directory: .3d-contrib
         run: |
-          git apply ../.github/patches/3d-contrib-private-repos.patch
+          git apply ../.github/patches/3d-contrib.patch
           npm ci --no-audit --no-fund
           npx tsc
       - name: Generate 3D contrib
@@ -38,6 +39,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.METRICS_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
           SETTING_JSON: .github/3d-colors.json
+          LANGUAGE_COLORS: "true"
+          TIME_ZONE: Europe/Kyiv
         run: node .3d-contrib/dist0/src/index.js
       - name: Commit & Push
         run: |
