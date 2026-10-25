@@ -40,6 +40,8 @@ jobs:
           USERNAME: ${{ github.repository_owner }}
           SETTING_JSON: .github/3d-colors.json
           LANGUAGE_COLORS: "true"
+          # How the language marks the bar top: glow, center or fill
+          LANGUAGE_STYLE: glow
           TIME_ZONE: Europe/Kyiv
         run: node .3d-contrib/dist0/src/index.js
       - name: Commit & Push
