@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection,
-      # and colors the sides of each bar by the day's main language
+      # and marks the top of each bar with the day's main language
       - uses: actions/checkout@v5
         with:
           repository: yoshi389111/github-profile-3d-contrib
