@@ -17,8 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection,
-      # and marks the top of each bar with the day's main language
+      # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection
       - uses: actions/checkout@v5
         with:
           repository: yoshi389111/github-profile-3d-contrib
@@ -31,7 +30,7 @@ jobs:
       - name: Build 3D contrib
         working-directory: .3d-contrib
         run: |
-          git apply ../.github/patches/3d-contrib.patch
+          git apply ../.github/patches/3d-contrib-private-repos.patch
           npm ci --no-audit --no-fund
           npx tsc
       - name: Generate 3D contrib
@@ -39,10 +38,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.METRICS_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
           SETTING_JSON: .github/3d-colors.json
-          LANGUAGE_COLORS: "true"
-          # How the language marks the bar top: glow, center or fill
-          LANGUAGE_STYLE: glow
-          TIME_ZONE: Europe/Kyiv
         run: node .3d-contrib/dist0/src/index.js
       - name: Commit & Push
         run: |
