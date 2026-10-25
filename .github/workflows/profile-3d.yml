@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Built from source: the patch adds commits from private repositories, which GitHub hides from contributionsCollection,
-      # and colors the sides of each bar by the day's main language
+      # and marks the top of each bar with the day's main language
       - uses: actions/checkout@v5
         with:
           repository: yoshi389111/github-profile-3d-contrib
@@ -40,6 +40,8 @@ jobs:
           USERNAME: ${{ github.repository_owner }}
           SETTING_JSON: .github/3d-colors.json
           LANGUAGE_COLORS: "true"
+          # How the language marks the bar top: glow, center or fill
+          LANGUAGE_STYLE: glow
           TIME_ZONE: Europe/Kyiv
         run: node .3d-contrib/dist0/src/index.js
       - name: Commit & Push
